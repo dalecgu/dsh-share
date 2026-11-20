@@ -2,15 +2,11 @@
 
 [简体中文](./README.md) | English
 
-Share DSH Q&As or selected conversation groups as PNG or Markdown.
+Export selected DSH Q&As as Markdown or a standalone HTML file.
 
 Multi-select Q&As with the same interaction and experience as the DeepSeek web app.
 
 ![dsh-share multi-turn Q&A selection](./assets/readme/share-selection.en.webp)
-
-Adjust the image width, font size, and process visibility before downloading or copying the result.
-
-![dsh-share image generation](./assets/readme/share-dialog.en.webp)
 
 ## Features
 
@@ -18,16 +14,13 @@ Adjust the image width, font size, and process visibility before downloading or 
 - The share action below any turn opens the same selection mode with only that Q&A preselected
 - Shows linked checkboxes beside both the question and answer, lets you click content to select a group, and supports non-contiguous selection
 - Keeps a checkbox visible while scrolling through long content, then lets it leave at that question or answer's boundary
-- Supports image copy, PNG download, and Markdown download
-- Downloads use `dsh-conversation title`, with `-01`, `-02`, etc. for multiple images. Invalid filename characters are sanitized, long titles are shortened, and a timestamp is used when no title is available.
-- In selection mode, choose Markdown or HTML from the format menu next to Download, then download the selected format. Create image remains a separate action. HTML uses a lightweight conversation layout, user bubbles, and core official Markdown styling, preserving available theme color snapshots. Text, code, and tables work offline; images and emoji are embedded where possible, with placeholders for unavailable images. Host scripts, interactive controls, and internal identifiers are excluded. Non-raster images such as SVG are not embedded.
-- Packs complete Q&A groups in order into PNGs: while the current page is below 4096 CSS pixels, it accepts the next complete group; a new page starts once the target is reached or exceeded. Supports per-page preview, copy, and download. “Download all” saves one ZIP containing every numbered PNG, with a 512 MiB limit on total image size. A final page containing just one group and measuring less than 1024 CSS pixels is merged into the previous page. Selecting only one group keeps a single page. Pages may exceed the target height without cropping content.
-- Exports at 2× resolution by default, trying 1× or 0.5× for oversized images or failed renders while keeping the full content. If generation still fails, an error suggests reducing the font size or content, or exporting Markdown.
+- Choose Markdown or HTML from the format menu at the right of the bottom bar, then download
+- Downloads use `dsh-conversation title`; invalid filename characters are sanitized, long titles are shortened, and a timestamp is used when no title is available
+- HTML uses a lightweight conversation layout, user bubbles, and core official Markdown styling, preserving available theme color snapshots. Text, code, and tables work offline; images and emoji are embedded where possible, with placeholders for unavailable images. Host scripts, interactive controls, and internal identifiers are excluded. Non-raster images such as SVG are not embedded
 - Preserves Markdown, code blocks, tables, images, and tool call summaries
-- Supports adjustable image widths and font sizes, with a scrollable preview for long images
-- Can hide reasoning and tool calls, leaving only the question and final answer
+- Hides reasoning and tool calls by default, leaving only the question and final answer; uncheck the option in the bottom bar to include them
 
-Performance testing: Everyday chat keeps only the lightweight share actions. Selection processing and image generation start only when sharing, with optimizations for multi-turn conversations.
+Performance: Everyday chat keeps only the lightweight share actions. Selection processing and export start only when sharing.
 
 ## Quick installation
 
@@ -80,7 +73,6 @@ The development baseline is `@deepseek-ai/dsh 0.2.0-rc.2`, with a runtime depend
 
 ## Known limitations
 
-- Copying an image requires clipboard permission. You can still download it if permission is unavailable.
 - Unreadable remote resources are replaced with transparent placeholders.
 - Only fully loaded Q&As can be selected. Scroll upward first to load older content.
 

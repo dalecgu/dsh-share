@@ -1,4 +1,4 @@
-import { cloneShareMessage, visibleAssistantElements } from './card.ts'
+import { cloneShareMessage, visibleAssistantElements } from './message.ts'
 import type { ShareMessage } from './content.ts'
 import type { ShareSettings } from './settings.ts'
 import { applyHtmlExportTheme } from './export-theme.ts'

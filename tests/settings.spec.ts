@@ -3,12 +3,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SHARE_SETTINGS,
-  FONT_SIZE_PRESETS,
-  loadDirectSingleTurn,
   loadShareSettings,
-  saveDirectSingleTurn,
   saveShareSettings,
-  WIDTH_PRESETS,
 } from '../src/client/settings.ts'
 
 function createMemoryStorage(): Storage {
@@ -23,40 +19,23 @@ function createMemoryStorage(): Storage {
   }
 }
 
-describe('分享图片设置', () => {
-  it('提供手机、平板和电脑的宽度与字号预设', () => {
-    expect(WIDTH_PRESETS).toEqual({ phone: 375, tablet: 768, desktop: 1024 })
-    expect(FONT_SIZE_PRESETS).toEqual({ normal: 16, large: 18, xlarge: 20 })
-    expect(DEFAULT_SHARE_SETTINGS).toEqual({
-      width: 'tablet',
-      fontSize: 'normal',
-      hideProcess: false,
-    })
+describe('导出设置', () => {
+  it('默认不展示过程', () => {
+    expect(DEFAULT_SHARE_SETTINGS).toEqual({ hideProcess: true })
+    expect(loadShareSettings(createMemoryStorage())).toEqual({ hideProcess: true })
   })
 
-  it('保存有效偏好，并忽略无效的历史值', () => {
+  it('保存选择，并忽略无效的历史值', () => {
     const storage = createMemoryStorage()
-    saveShareSettings(storage, { width: 'desktop', fontSize: 'xlarge', hideProcess: true })
-    expect(loadShareSettings(storage)).toEqual({
-      width: 'desktop',
-      fontSize: 'xlarge',
-      hideProcess: true,
-    })
+    saveShareSettings(storage, { hideProcess: false })
+    expect(loadShareSettings(storage)).toEqual({ hideProcess: false })
 
-    storage.setItem('dsh-share.width', 'unknown')
-    storage.setItem('dsh-share.font-size', 'tiny')
     storage.setItem('dsh-share.hide-process', 'invalid')
-    expect(loadShareSettings(storage)).toEqual(DEFAULT_SHARE_SETTINGS)
+    expect(loadShareSettings(storage)).toEqual({ hideProcess: false })
   })
 
-  it('单轮点击直接生成图片默认关闭，并可单独持久化', () => {
-    const storage = createMemoryStorage()
-    expect(loadDirectSingleTurn(storage)).toBe(false)
-
-    saveDirectSingleTurn(storage, true)
-    expect(loadDirectSingleTurn(storage)).toBe(true)
-
-    storage.setItem('dsh-share.direct-single-turn', 'invalid')
-    expect(loadDirectSingleTurn(storage)).toBe(false)
+  it('没有存储时使用默认值，不抛错', () => {
+    expect(loadShareSettings(undefined)).toEqual({ hideProcess: true })
+    saveShareSettings(undefined, { hideProcess: false })
   })
 })

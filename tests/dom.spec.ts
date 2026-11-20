@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { findTurnContent, findTurnContentFromAction } from '../src/client/dom.ts'
-import { visibleAssistantElements, cloneShareMessage } from '../src/client/card.ts'
+import { visibleAssistantElements, cloneShareMessage } from '../src/client/message.ts'
 
 function renderFixture(): HTMLElement {
   document.body.innerHTML = `

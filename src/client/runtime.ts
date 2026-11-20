@@ -1,5 +1,4 @@
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { createShareCard } from './card.ts'
 import {
   selectedTurnsToShareMessages,
   type SelectedTurn,
@@ -14,28 +13,13 @@ import { getDocumentLocale, t, type ShareLocale } from './i18n.ts'
 import { createShareMarkdown } from './markdown.ts'
 import { createShareHtml } from './html.ts'
 import { mountDownloadFormat, type DownloadFormat } from './download-format.ts'
-import {
-  PreviewDialog,
-  downloadMarkdownFile,
-  downloadHtmlFile,
-  renderShareImage,
-  type ImageRenderer,
-} from './preview-dialog.ts'
-import { loadDirectSingleTurn, type ShareSettings } from './settings.ts'
+import { downloadMarkdownFile, downloadHtmlFile } from './download.ts'
+import { loadShareSettings, saveShareSettings, type ShareSettings } from './settings.ts'
 import { STYLE_ID, STYLE_TEXT } from './styles.ts'
 
 export interface InstallOptions {
   getLocale?: () => ShareLocale
-  renderImage?: ImageRenderer
   subscribeLocale?: (listener: () => void) => () => void
-}
-
-interface RenderRequest {
-  content: readonly ShareMessage[]
-  epoch: number
-  locale: 'zh' | 'en'
-  preservePreview: boolean
-  settings: ShareSettings
 }
 
 export interface ShareSelectionSnapshot {
@@ -79,7 +63,6 @@ export interface ShareRuntime {
   enterSelection(sessionId: string, source?: HTMLElement, initialTurn?: number, title?: string): void
   cancelSelection(sessionId: string): void
   toggleSelection(sessionId: string, turnId: string): void
-  openSelected(sessionId: string): void
   dispose(): void
 }
 
@@ -159,16 +142,7 @@ export function createShareRuntime(document: Document, options: InstallOptions =
   style.textContent = STYLE_TEXT
   document.head.append(style)
 
-  const renderImage = options.renderImage ?? renderShareImage
   const currentLocale = options.getLocale ?? (() => getDocumentLocale(document))
-  let activeContent: readonly ShareMessage[] | undefined
-  let activeTitle: string | undefined
-  let activeGroupCount = 0
-  let renderEpoch = 0
-  let pendingRender: RenderRequest | undefined
-  let renderRunning = false
-  let settingsRenderTimer: number | undefined
-  let dialog: PreviewDialog | undefined
   const selections = new Map<string, SessionSelection>()
 
   const preserveScrollPosition = (scroll: HTMLElement, scrollTop: number): void => {
@@ -231,7 +205,6 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       const count = controller.footer.querySelector<HTMLElement>('[data-dsh-share-selection-count]')
       const cancel = controller.footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-cancel]')
       const download = controller.footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-download]')
-      const create = controller.footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-create]')
       if (all) {
         all.setAttribute('aria-checked', String(controller.snapshot.allSelected))
         if (all.ariaLabel !== strings.selectAll) all.ariaLabel = strings.selectAll
@@ -242,14 +215,10 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       if (count && count.textContent !== nextCount) count.textContent = nextCount
       if (cancel && cancel.textContent !== strings.cancelSelection) cancel.textContent = strings.cancelSelection
       if (download) updateResponsiveLabel(download, strings.downloadFile, strings.downloadFile)
-      if (create) {
-        updateResponsiveLabel(create, strings.createSelection, strings.createSelectionCompact)
-      }
       if (download) {
         download.disabled = controller.selected.size === 0 || download.dataset.busy === 'true'
         controller.downloadFormat?.update(currentLocale(), download.disabled)
       }
-      if (create) create.disabled = controller.selected.size === 0
     }
   }
 
@@ -508,31 +477,51 @@ export function createShareRuntime(document: Document, options: InstallOptions =
     cancel.textContent = strings.cancelSelection
     cancel.addEventListener('click', () => resetSelection(controller))
 
-    const create = makeButton(document, 'dshShareSelectionCreate')
-    appendResponsiveLabel(
-      document,
-      create,
-      strings.createSelection,
-      strings.createSelectionCompact,
-    )
-    create.addEventListener('click', () => {
-      const messages = selectedTurnsToShareMessages(controller.selected.values())
-      if (messages.length === 0) return
-      activeContent = messages
-      activeTitle = controller.title
-      activeGroupCount = controller.selected.size
-      void renderContent(messages, activeGroupCount)
-    })
-
     const downloadGroup = document.createElement('div')
     downloadGroup.dataset.dshShareDownloadGroup = ''
     const download = makeButton(document, 'dshShareSelectionDownload')
     appendResponsiveLabel(document, download, strings.downloadFile, strings.downloadFile)
     const formatMount = document.createElement('span')
+    formatMount.dataset.dshShareFormatMount = ''
     let format: DownloadFormat = 'markdown'
     controller.downloadFormat = mountDownloadFormat(formatMount, value => { format = value })
     controller.downloadFormat.update(currentLocale(), controller.selected.size === 0)
-    downloadGroup.append(download, formatMount)
+
+    // 下载直接读当前设置，因此「不展示过程」必须能在选择栏就地切换，
+    // 不需要先进入图片预览再折返。
+    const hideProcessToggle = document.createElement('label')
+    hideProcessToggle.dataset.dshShareSelectionHideProcess = ''
+    const hideProcessInput = document.createElement('input')
+    hideProcessInput.type = 'checkbox'
+    hideProcessInput.dataset.dshShareSelectionHideProcessInput = ''
+    const hideProcessLabel = document.createElement('span')
+    hideProcessLabel.dataset.dshShareSelectionHideProcessLabel = ''
+    hideProcessLabel.textContent = strings.hideProcess
+    hideProcessToggle.append(hideProcessInput, hideProcessLabel)
+
+    // 只从持久化设置读取，避免在选择阶段提前构造预览弹窗。
+    const selectionStorage = (): Storage | undefined => {
+      try {
+        return document.defaultView?.localStorage
+      } catch {
+        return undefined
+      }
+    }
+    const readSelectionSettings = (): ShareSettings => ({
+      ...loadShareSettings(selectionStorage()),
+      hideProcess: hideProcessInput.checked,
+    })
+    const syncHideProcess = (): void => {
+      hideProcessInput.checked = loadShareSettings(selectionStorage()).hideProcess
+      hideProcessLabel.textContent = t(currentLocale()).hideProcess
+    }
+    syncHideProcess()
+    hideProcessInput.addEventListener('change', () => {
+      saveShareSettings(selectionStorage(), readSelectionSettings())
+    })
+
+    // 格式菜单在前、下载按钮在后，整体靠右，下载按钮落在右下角。
+    downloadGroup.append(formatMount, download)
     const htmlStatus = document.createElement('span')
     htmlStatus.role = 'status'
     htmlStatus.dataset.dshShareHtmlStatus = ''
@@ -542,8 +531,9 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       if (!messages.length) return
       const locale = currentLocale()
       const title = controller.title
+      const settings = readSelectionSettings()
       if (format === 'markdown') {
-        downloadMarkdownFile(document, createShareMarkdown(messages, locale, ensureDialog().settings), title)
+        downloadMarkdownFile(document, createShareMarkdown(messages, locale, settings), title)
         htmlStatus.textContent = ''
         return
       }
@@ -552,7 +542,7 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       controller.downloadFormat?.update(locale, true)
       htmlStatus.textContent = t(locale).htmlExporting
       try {
-        const result = await createShareHtml(document, messages, locale, ensureDialog().settings)
+        const result = await createShareHtml(document, messages, locale, settings)
         if (!footer.isConnected) return
         downloadHtmlFile(document, result.html, title)
         htmlStatus.textContent = result.missingImages ? t(currentLocale()).htmlMissingImages : ''
@@ -564,127 +554,9 @@ export function createShareRuntime(document: Document, options: InstallOptions =
         if (controller.footer === footer) controller.downloadFormat?.update(currentLocale(), download.disabled)
       }
     })
-    inner.append(selectAll, divider, count, cancel, downloadGroup, create, htmlStatus)
+    inner.append(selectAll, divider, count, cancel, hideProcessToggle, downloadGroup, htmlStatus)
     footer.append(inner)
     return footer
-  }
-
-  const clearSettingsRenderTimer = (): void => {
-    if (settingsRenderTimer === undefined) return
-    document.defaultView?.clearTimeout(settingsRenderTimer)
-    settingsRenderTimer = undefined
-  }
-
-  const createRenderRequest = (
-    content: readonly ShareMessage[],
-    groupCount: number,
-    preservePreview = false,
-    epoch = ++renderEpoch,
-  ): RenderRequest => {
-    const locale = currentLocale()
-    const preview = ensureDialog()
-    const settings = preview.settings
-    preview.showLoading(groupCount, preservePreview, true)
-    return { content, epoch, locale, preservePreview, settings }
-  }
-
-  const executeRender = async (request: RenderRequest): Promise<void> => {
-    const preview = ensureDialog()
-    const card = createShareCard(document, request.content, request.locale, request.settings)
-    try {
-      const blob = await renderImage(card.element)
-      if (request.epoch === renderEpoch) {
-        await preview.showResult(blob, () => request.epoch === renderEpoch)
-      }
-    } catch (error) {
-      if (request.epoch === renderEpoch) {
-        console.warn('[dsh-share] Failed to render conversation image', error)
-        preview.showError(request.preservePreview)
-      }
-    } finally {
-      card.dispose()
-    }
-  }
-
-  /** 图片生成不可取消，因此只允许一个画布任务运行；等待中的请求只保留最新一次。 */
-  const drainRenderQueue = async (): Promise<void> => {
-    if (renderRunning) return
-    renderRunning = true
-    try {
-      while (pendingRender) {
-        const request = pendingRender
-        pendingRender = undefined
-        await executeRender(request)
-      }
-    } finally {
-      renderRunning = false
-      if (pendingRender) void drainRenderQueue()
-    }
-  }
-
-  const renderContent = (
-    content: readonly ShareMessage[],
-    groupCount: number,
-    preservePreview = false,
-  ): void => {
-    clearSettingsRenderTimer()
-    pendingRender = createRenderRequest(content, groupCount, preservePreview)
-    void drainRenderQueue()
-  }
-
-  const scheduleSettingsRender = (
-    content: readonly ShareMessage[],
-    groupCount: number,
-  ): void => {
-    clearSettingsRenderTimer()
-    pendingRender = undefined
-    const epoch = ++renderEpoch
-    dialog?.showPendingUpdate()
-    const window = document.defaultView
-    if (!window) {
-      pendingRender = createRenderRequest(content, groupCount, true, epoch)
-      void drainRenderQueue()
-      return
-    }
-    // 连续点击宽度、字号或过程开关时，只渲染用户最终停留的设置。
-    settingsRenderTimer = window.setTimeout(() => {
-      settingsRenderTimer = undefined
-      if (epoch !== renderEpoch) return
-      pendingRender = createRenderRequest(content, groupCount, true, epoch)
-      void drainRenderQueue()
-    }, 80)
-  }
-
-  const invalidateRenderQueue = (): void => {
-    clearSettingsRenderTimer()
-    pendingRender = undefined
-    renderEpoch += 1
-  }
-
-  function ensureDialog(): PreviewDialog {
-    if (dialog) return dialog
-    dialog = new PreviewDialog(document, {
-      getConversationTitle: () => activeTitle,
-      getLocale: currentLocale,
-      onSettingsChange: () => {
-        if (activeContent) scheduleSettingsRender(activeContent, activeGroupCount)
-      },
-      onDismiss: () => {
-        activeContent = undefined
-        activeGroupCount = 0
-        invalidateRenderQueue()
-      },
-    })
-    return dialog
-  }
-
-  const directSingleTurnEnabled = (): boolean => {
-    if (dialog) return dialog.directSingleTurn
-    try {
-      return loadDirectSingleTurn(document.defaultView?.localStorage)
-    } catch {
-      return false
-    }
   }
 
   const enterSelection = (sessionId: string, source?: HTMLElement, initialTurn?: number, title?: string): void => {
@@ -699,20 +571,6 @@ export function createShareRuntime(document: Document, options: InstallOptions =
     const scroll = root?.querySelector<HTMLElement>('[data-conversation-scroll]')
       ?? document.querySelector<HTMLElement>('[data-conversation-scroll]')
     if (!scroll) return
-    if (initialTurn !== undefined && directSingleTurnEnabled()) {
-      const selected = selectableTurns(scroll).find(turn => turn.turn === initialTurn)
-      if (!selected) return
-      const messages = selectedTurnsToShareMessages([{
-        content: snapshotTurnContent(selected.content),
-        id: selected.id,
-        turn: selected.turn,
-      }])
-      activeContent = messages
-      activeTitle = controller.title
-      activeGroupCount = 1
-      void renderContent(messages, activeGroupCount)
-      return
-    }
     subscribeSelectionLocale()
     const scrollTop = scroll.scrollTop
     controller.scroll = scroll
@@ -763,21 +621,9 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       resetSelection(selectionFor(sessionId))
     },
     toggleSelection: (sessionId, turnId) => toggleSelection(selectionFor(sessionId), turnId),
-    openSelected: (sessionId) => {
-      const controller = selectionFor(sessionId)
-      const messages = selectedTurnsToShareMessages(controller.selected.values())
-      if (messages.length === 0) return
-      activeContent = messages
-      activeTitle = controller.title
-      activeGroupCount = controller.selected.size
-      void renderContent(messages, activeGroupCount)
-    },
     dispose: () => {
       if (disposed) return
       disposed = true
-      activeContent = undefined
-      activeGroupCount = 0
-      invalidateRenderQueue()
       for (const controller of selections.values()) {
         cleanupSelectionDom(controller)
         controller.listeners.clear()
@@ -789,8 +635,6 @@ export function createShareRuntime(document: Document, options: InstallOptions =
       unsubscribeLocale?.()
       unsubscribeLocale = undefined
       style.remove()
-      dialog?.destroy()
-      dialog = undefined
     },
   }
 }

@@ -25,7 +25,7 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: {
-      onlyBundle: ['html-to-image', 'turndown', 'turndown-plugin-gfm'],
+      onlyBundle: ['turndown', 'turndown-plugin-gfm'],
       neverBundle: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives', '@mixmark-io/domino'],
     },
     outputOptions: {

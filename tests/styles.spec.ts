@@ -8,7 +8,7 @@ function declarations(selector: string): string {
   return STYLE_TEXT.slice(start, STYLE_TEXT.indexOf('}', start))
 }
 
-describe('分享界面主题契约', () => {
+describe('导出界面主题契约', () => {
   it('消息入口跟随官方圆角和内容字号增量', () => {
     const button = declarations('[data-dsh-share-button]')
     expect(button).toContain('border-radius: var(--dsw-radius-sm, 6px)')
@@ -22,18 +22,14 @@ describe('分享界面主题契约', () => {
     expect(STYLE_TEXT).not.toMatch(/border-radius:\s*\d/)
     expect(STYLE_TEXT).not.toContain('--dsw-static-deepseek-500')
     expect(STYLE_TEXT).not.toContain('--dsw-alias-line-border')
-    expect(declarations('.dsh-share-dialog__action--primary')).toContain('--dsw-alias-button-primary-fill')
-    expect(declarations('.dsh-share-dialog__action--primary')).toContain('--dsw-alias-label-primary-foreground')
-    expect(declarations('.dsh-share-dialog__action--primary:hover:not(:disabled)')).toContain('--dsw-alias-button-primary-hover')
-    expect(declarations('[data-dsh-share-dialog]::backdrop')).toContain('--dsw-alias-bg-mask-1')
-    expect(STYLE_TEXT).toContain('box-shadow: var(--dsw-elevation-prominent,')
+    // 底栏半透明皮肤下需要不透明兜底。
+    expect(STYLE_TEXT).toContain('--dsh-share-panel-base')
+    expect(STYLE_TEXT).toContain('var(--dsw-alias-bg-base')
+    expect(STYLE_TEXT).toContain('border: 1px solid var(--dsw-alias-border-l1')
   })
 
-  it('选中档位采用配套主题前景背景及高对比兜底，不依赖正文颜色', () => {
-    const choice = declarations('.dsh-share-dialog__choice[aria-pressed="true"]')
-    expect(choice).toContain('background: var(--dsw-alias-button-primary-fill, #111827)')
-    expect(choice).toContain('color: var(--dsw-alias-label-primary-foreground, #fff)')
-    expect(choice).not.toContain('--dsw-alias-interactive-bg-hover')
-    expect(choice).not.toContain('--dsw-alias-label-primary,')
+  it('勾选框沿用宿主品牌色，不写死颜色', () => {
+    const input = declarations('[data-dsh-share-selection-hide-process] input')
+    expect(input).toContain('accent-color: var(--dsw-alias-brand-primary')
   })
 })

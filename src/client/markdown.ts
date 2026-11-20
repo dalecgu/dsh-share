@@ -1,7 +1,7 @@
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import type { ShareMessage } from './content.ts'
-import { cloneShareMessage, visibleAssistantElements } from './card.ts'
+import { cloneShareMessage, visibleAssistantElements } from './message.ts'
 import type { ShareSettings } from './settings.ts'
 
 function createConverter(): TurndownService {

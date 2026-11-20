@@ -242,7 +242,7 @@ describe('分享按钮运行时', () => {
     expect(action.props.children.type).toBe('button')
     expect(action.props.children.props).toMatchObject({
       'data-dsh-share-button': '',
-      'aria-label': '将当前问答分享为图片',
+      'aria-label': '分享当前问答',
     })
     expect(action.props.children.props.children).toMatchObject({
       type: IconShareOutlineRegular,
@@ -264,8 +264,11 @@ describe('分享按钮运行时', () => {
     expect(styleText).toContain('[data-dsh-share-turn-select]')
     expect(styleText).toContain('[data-dsh-share-selection-footer]')
     expect(styleText).toContain('height: 66px')
-    expect(styleText).toContain('height: 108px')
-    expect(styleText).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) minmax(0, 1.3fr)')
+    // 窄屏多出一行「不展示过程」开关，底栏相应加高。
+    expect(styleText).toContain('height: 148px')
+    // 生成图片相关的样式随功能一起移除。
+    expect(styleText).not.toContain('[data-dsh-share-card]')
+    expect(styleText).not.toContain('.dsh-share-dialog__')
     expect(styleText).not.toContain('[data-dsh-share-select]')
 
     for (const dispose of injectionDisposers) dispose()
@@ -287,15 +290,14 @@ describe('分享按钮运行时', () => {
     const header = ShareConversationAction(headerProps(runtime))
 
     expect(action.props.label).toBe('Share')
-    expect(action.props.children.props['aria-label']).toBe('Share this Q&A as an image')
+    expect(action.props.children.props['aria-label']).toBe('Share this Q&A')
     expect(header.props.label).toBe('Share conversation')
     expect(document.querySelector('[data-dsh-share-dialog]')).toBeNull()
 
     locale = 'zh'
     triggerShareAction(tail, runtime)
-    document.querySelector<HTMLButtonElement>('[data-dsh-share-selection-create]')?.click()
-    expect(document.querySelector('[data-dsh-share-close]')?.getAttribute('aria-label')).toBe('关闭')
-    expect(document.querySelector('[data-dsh-share-choice][data-value="phone"]')?.textContent).toBe('手机')
+    const toggleLabel = fixture.scroll.querySelector('[data-dsh-share-selection-hide-process]')
+    expect(toggleLabel?.textContent).toBe('不展示过程')
 
     runtime.dispose()
   })
@@ -322,7 +324,6 @@ describe('分享按钮运行时', () => {
     const selectAll = footer.querySelector<HTMLButtonElement>('[data-dsh-share-select-all]')
     const cancel = footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-cancel]')
     const markdown = footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-download]')
-    const create = footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-create]')
     expect(selectAll?.ariaLabel).toBe('Select all')
     expect(selectAll?.textContent).toBe('Select all')
     expect(footer.querySelector('[data-dsh-share-selection-count]')?.textContent)
@@ -330,8 +331,6 @@ describe('分享按钮运行时', () => {
     expect(cancel?.textContent).toBe('Cancel')
     expect(markdown?.ariaLabel).toBe('Download')
     expect(markdown?.querySelector('[data-dsh-share-label="compact"]')?.textContent).toBe('Download')
-    expect(create?.ariaLabel).toBe('Create image')
-    expect(create?.querySelector('[data-dsh-share-label="wide"]')?.textContent).toBe('Create image')
     expect([...fixture.scroll.querySelectorAll<HTMLButtonElement>('[data-dsh-share-turn-select]')]
       .every(button => button.ariaLabel === 'Unselect this conversation group')).toBe(true)
 
@@ -424,15 +423,16 @@ describe('分享按钮运行时', () => {
     expect(footer.textContent).toContain('已选择 2 组对话')
     expect(getComputedStyle(footer).height).toBe('66px')
     const markdown = footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-download]')
-    const create = footer.querySelector<HTMLButtonElement>('[data-dsh-share-selection-create]')
     expect(markdown?.ariaLabel).toBe('下载')
     expect(markdown?.querySelector('[data-dsh-share-label="wide"]')?.textContent).toBe('下载')
     expect(markdown?.querySelector('[data-dsh-share-label="compact"]')?.textContent).toBe('下载')
-    expect(markdown?.parentElement?.nextElementSibling).toBe(create)
-    expect(create?.ariaLabel).toBe('生成分享图片')
-    expect(create?.querySelector('[data-dsh-share-label="wide"]')?.textContent).toBe('生成分享图片')
-    expect(create?.querySelector('[data-dsh-share-label="compact"]')?.textContent).toBe('生成图片')
-    expect(create?.querySelector('svg')).toBeNull()
+    // 底栏不再有「生成图片」按钮；下载组是最后一个控件，整体靠右。
+    expect(footer.querySelector('[data-dsh-share-selection-create]')).toBeNull()
+    const hideProcess = footer.querySelector<HTMLElement>('[data-dsh-share-selection-hide-process]')
+    const downloadGroup = footer.querySelector<HTMLElement>('[data-dsh-share-download-group]')
+    expect(hideProcess?.nextElementSibling).toBe(downloadGroup)
+    expect(downloadGroup?.lastElementChild).toBe(markdown)
+    expect(getComputedStyle(downloadGroup as HTMLElement).marginLeft).toBe('auto')
     expect(ShareAction(actionProps(runtime)).type).toBe(Tooltip)
     expect(ShareConversationAction(headerProps(runtime)).type).toBe(Fragment)
 
@@ -563,7 +563,6 @@ describe('分享按钮运行时', () => {
     const first = firstPair[1]
     const selectAll = fixture.scroll.querySelector<HTMLButtonElement>('[data-dsh-share-select-all]')
     const markdown = fixture.scroll.querySelector<HTMLButtonElement>('[data-dsh-share-selection-download]')
-    const create = fixture.scroll.querySelector<HTMLButtonElement>('[data-dsh-share-selection-create]')
     first?.click()
     expect(runtime.selectionFor('session-1').getSnapshot()).toMatchObject({
       allSelected: false,
@@ -584,10 +583,64 @@ describe('分享按钮运行时', () => {
       count: 0,
     })
     expect(markdown?.disabled).toBe(true)
-    expect(create?.disabled).toBe(true)
-    expect(getComputedStyle(create as HTMLElement).opacity).toBe('0.45')
 
     runtime.dispose()
+  })
+
+  it('下载前可在选择栏直接切换不展示过程，无需先打开图片预览', async () => {
+    const createdBlobs: Blob[] = []
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn((blob: Blob) => {
+        createdBlobs.push(blob)
+        return 'blob:dsh-share-markdown'
+      }),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    vi.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    window.localStorage.clear()
+
+    const fixture = createConversation()
+    addTurn(fixture, 'process', 1, true)
+    const runtime = createShareRuntime(document)
+    clickHeaderShare(runtime, fixture.source)
+
+    const toggle = fixture.scroll.querySelector<HTMLInputElement>(
+      '[data-dsh-share-selection-hide-process-input]',
+    )!
+    const download = fixture.scroll.querySelector<HTMLButtonElement>(
+      '[data-dsh-share-selection-download]',
+    )!
+    // 默认勾选：导出默认不展示过程。
+    expect(toggle.checked).toBe(true)
+    expect(document.querySelector('[data-dsh-share-dialog]')).toBeNull()
+    expect(fixture.scroll.querySelector('[data-dsh-share-selection-hide-process]')?.textContent)
+      .toContain('不展示过程')
+
+    toggle.click()
+    expect(toggle.checked).toBe(false)
+    expect(window.localStorage.getItem('dsh-share.hide-process')).toBe('false')
+    expect(document.querySelector('[data-dsh-share-dialog]')).toBeNull()
+
+    // 在构造 Blob 时截获正文，jsdom 的 Blob 不提供 .text()。
+    let markdown = ''
+    const RealBlob = globalThis.Blob
+    vi.stubGlobal('Blob', class extends RealBlob {
+      constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options)
+        if (options?.type?.startsWith('text/markdown')) markdown = String(parts?.[0] ?? '')
+      }
+    })
+    // 取消勾选后导出保留过程内容，且整个过程不创建图片预览。
+    download.click()
+    await vi.waitFor(() => expect(markdown).not.toBe(''))
+    expect(markdown).toContain('Think 中间步骤')
+    expect(markdown).toContain('Bash')
+    expect(document.querySelector('[data-dsh-share-dialog]')).toBeNull()
+
+    vi.unstubAllGlobals()
+    runtime.dispose()
+    window.localStorage.clear()
   })
 
   it('按轮次生成不连续问答组，并可下载同一内容的 Markdown', async () => {
@@ -639,30 +692,6 @@ describe('分享按钮运行时', () => {
     await vi.waitFor(() => expect(downloadedFilename).toBe('dsh-测试对话.html'))
     expect(createdBlobs.some(blob => blob.type.startsWith('text/html'))).toBe(true)
     expect(markdownButton.disabled).toBe(false)
-
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledOnce())
-    const text = rendered[0]?.textContent ?? ''
-    expect(text).toContain('问题 first')
-    expect(text).toContain('回答 first')
-    expect(text).toContain('问题 third')
-    expect(text).toContain('回答 third')
-    expect(text).not.toContain('问题 second')
-    expect(text.indexOf('问题 first')).toBeLessThan(text.indexOf('问题 third'))
-    expect(rendered[0]?.querySelectorAll('[data-dsh-share-message-group]')).toHaveLength(4)
-    expect(rendered[0]?.querySelector('[data-dsh-share-omission]')).not.toBeNull()
-    expect(document.querySelector('[data-dsh-share-title]')?.textContent).toBe('生成图片')
-    const dialogFooter = document.querySelector('.dsh-share-dialog__footer') as HTMLElement
-    expect(dialogFooter.querySelector('[data-dsh-share-download-markdown]')).toBeNull()
-    expect(dialogFooter.querySelectorAll(':scope > button:not([hidden])')).toHaveLength(2)
-    expect(dialogFooter.querySelector<HTMLElement>('[data-dsh-share-download-all]')!.hidden).toBe(true)
-    expect(dialogFooter.querySelector<HTMLElement>('[data-dsh-share-pages]')?.hidden).toBe(true)
-    expect(dialogFooter.querySelector('[data-dsh-share-download]')?.textContent).toBe('下载图片')
-    expect(dialogFooter.querySelector('[data-dsh-share-copy]')).not.toBeNull()
-    await vi.waitFor(() => expect(dialogFooter.querySelector<HTMLButtonElement>('[data-dsh-share-download]')!.disabled).toBe(false))
-    dialogFooter.querySelector<HTMLButtonElement>('[data-dsh-share-download]')!.click()
-    expect(downloadedFilename).toBe('dsh-测试对话.png')
 
     runtime.dispose()
   })
@@ -717,13 +746,7 @@ describe('分享按钮运行时', () => {
     addTurn(fixture, 'first', 1)
     const tail = addTurn(fixture, 'click', 2)
     addTurn(fixture, 'third', 3)
-    const renderImage = vi.fn(async (element: HTMLElement) => {
-      expect(element.textContent).toContain('问题 click')
-      expect(element.textContent).toContain('回答 click')
-      expect(element.querySelectorAll('[data-dsh-share-message-group]')).toHaveLength(2)
-      return new Blob(['png'], { type: 'image/png' })
-    })
-    const runtime = createShareRuntime(document, { renderImage })
+    const runtime = createShareRuntime(document)
     triggerShareAction(tail, runtime, 'message-2')
 
     expect(runtime.selectionFor('session-1').getSnapshot()).toMatchObject({
@@ -739,67 +762,7 @@ describe('分享按钮运行时', () => {
       .map(button => button.dataset.dshShareTurnSelectKind)).toEqual(['question', 'answer'])
     expect(fixture.scroll.querySelector('[data-dsh-share-selection-count]')?.textContent)
       .toBe('已选择 1 组对话')
-    expect(renderImage).not.toHaveBeenCalled()
     expect(document.querySelector('[data-dsh-share-dialog]')).toBeNull()
-
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledOnce())
-    await vi.waitFor(() => {
-      const image = document.querySelector('[data-dsh-share-preview]') as HTMLImageElement
-      expect(image.src).toBe('blob:dsh-share-preview')
-      expect(image.hidden).toBe(false)
-      expect(image.style.width).toBe('768px')
-    })
-    expect(document.querySelector('[data-dsh-share-title]')?.textContent).toBe('生成图片')
-
-    runtime.dispose()
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:dsh-share-preview')
-  })
-
-  it('开启分享直接生成图片后，单轮按钮直接打开预览且顶部入口仍进入多选', async () => {
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => 'blob:dsh-share-direct'),
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-    window.localStorage.setItem('dsh-share.direct-single-turn', 'true')
-
-    const fixture = createConversation()
-    addTurn(fixture, 'first', 1)
-    const tail = addTurn(fixture, 'direct', 2)
-    addTurn(fixture, 'third', 3)
-    const renderImage = vi.fn(async (element: HTMLElement) => {
-      expect(element.textContent).toContain('问题 direct')
-      expect(element.textContent).toContain('回答 direct')
-      expect(element.textContent).not.toContain('问题 first')
-      expect(element.textContent).not.toContain('问题 third')
-      return new Blob(['png'], { type: 'image/png' })
-    })
-    const runtime = createShareRuntime(document, { renderImage })
-
-    triggerShareAction(tail, runtime, 'message-2')
-
-    expect(runtime.selectionFor('session-1').getSnapshot()).toMatchObject({
-      active: false,
-      count: 0,
-      total: 0,
-    })
-    expect(fixture.scroll.querySelector('[data-dsh-share-selection-footer]')).toBeNull()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledOnce())
-    await vi.waitFor(() => {
-      const image = document.querySelector('[data-dsh-share-preview]') as HTMLImageElement
-      expect(image.src).toBe('blob:dsh-share-direct')
-      expect(image.hidden).toBe(false)
-    })
-
-    ;(document.querySelector('[data-dsh-share-close]') as HTMLButtonElement).click()
-    clickHeaderShare(runtime, fixture.source)
-    expect(runtime.selectionFor('session-1').getSnapshot()).toMatchObject({
-      active: true,
-      count: 3,
-      total: 3,
-    })
 
     runtime.dispose()
   })
@@ -828,178 +791,53 @@ describe('分享按钮运行时', () => {
     runtime.dispose()
   })
 
-  it('切换电脑和大字号后重新生成图片并保存偏好', async () => {
+  it('勾选不展示过程后导出的 Markdown 不含 Think、工具调用和中间步骤', async () => {
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
-      value: vi.fn(() => `blob:dsh-share-${Math.random()}`),
+      value: vi.fn(() => 'blob:dsh-share-markdown'),
     })
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-
-    const fixture = createConversation()
-    const tail = addTurn(fixture, 'settings', 1)
-    const renderedSettings: Array<{ width: string; fontSize: string }> = []
-    const renderImage = vi.fn(async (element: HTMLElement) => {
-      renderedSettings.push({
-        width: element.style.width,
-        fontSize: element.style.getPropertyValue('--dsh-share-font-size'),
-      })
-      return new Blob(['png'], { type: 'image/png' })
-    })
-    const runtime = createShareRuntime(document, { renderImage })
-    triggerShareAction(tail, runtime)
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(1))
-    expect(renderedSettings[0]).toEqual({ width: '768px', fontSize: '16px' })
-
-    const directToggle = document.querySelector('[data-dsh-share-direct-single-turn]') as HTMLInputElement
-    const hideProcessToggle = document.querySelector('[data-dsh-share-hide-process]') as HTMLInputElement
-    expect(directToggle.checked).toBe(false)
-    expect(directToggle.parentElement?.textContent).toContain('分享直接生成图片')
-    expect(directToggle.parentElement?.nextElementSibling).toBe(hideProcessToggle.parentElement)
-    directToggle.click()
-    expect(window.localStorage.getItem('dsh-share.direct-single-turn')).toBe('true')
-    expect(renderImage).toHaveBeenCalledTimes(1)
-
-    ;(document.querySelector('[data-dsh-share-choice="width"][data-value="desktop"]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(2))
-    expect(renderedSettings[1]).toEqual({ width: '1024px', fontSize: '16px' })
-    ;(document.querySelector('[data-dsh-share-choice="font-size"][data-value="large"]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(3))
-    expect(renderedSettings[2]).toEqual({ width: '1024px', fontSize: '18px' })
-    expect(window.localStorage.getItem('dsh-share.width')).toBe('desktop')
-    expect(window.localStorage.getItem('dsh-share.font-size')).toBe('large')
-
-    runtime.dispose()
-  })
-
-  it('勾选不展示过程后隐藏 Think、工具调用和中间步骤', async () => {
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => `blob:dsh-share-${Math.random()}`),
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    vi.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    window.localStorage.clear()
 
     const fixture = createConversation()
     const tail = addTurn(fixture, 'clean', 1, true)
-    const renderedContent: string[] = []
-    const renderImage = vi.fn(async (element: HTMLElement) => {
-      renderedContent.push(element.textContent ?? '')
-      return new Blob(['png'], { type: 'image/png' })
-    })
-    const runtime = createShareRuntime(document, { renderImage })
-    triggerShareAction(tail, runtime)
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(1))
-    expect(renderedContent[0]).toContain('Think 中间步骤')
-    expect(renderedContent[0]).toContain('Bash')
+    const runtime = createShareRuntime(document)
 
-    const toggle = document.querySelector('[data-dsh-share-hide-process]') as HTMLInputElement
-    toggle.click()
-
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(2))
-    expect(renderedContent[1]).toContain('问题 clean')
-    expect(renderedContent[1]).toContain('最终回答 clean')
-    expect(renderedContent[1]).not.toContain('Think')
-    expect(renderedContent[1]).not.toContain('Bash')
-    expect(renderedContent[1]).not.toContain('中间说明')
-    expect(window.localStorage.getItem('dsh-share.hide-process')).toBe('true')
-
-    runtime.dispose()
-  })
-
-  it('连续修改图片设置时串行渲染，并只执行最后一组待处理设置', async () => {
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => 'blob:dsh-share-latest'),
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-
-    let finishFirst: (() => void) | undefined
-    let activeRenders = 0
-    let maxActiveRenders = 0
-    const renderedSettings: Array<{ width: string; fontSize: string }> = []
-    const renderImage = vi.fn(async (element: HTMLElement) => {
-      activeRenders += 1
-      maxActiveRenders = Math.max(maxActiveRenders, activeRenders)
-      renderedSettings.push({
-        width: element.style.width,
-        fontSize: element.style.getPropertyValue('--dsh-share-font-size'),
-      })
-      if (renderedSettings.length === 1) {
-        await new Promise<void>((resolve) => { finishFirst = resolve })
+    // 先取消默认勾选，确认过程内容会被导出。
+    const toggle = () => fixture.scroll.querySelector<HTMLInputElement>(
+      '[data-dsh-share-selection-hide-process-input]',
+    )!
+    let exported = ''
+    const RealBlob = globalThis.Blob
+    vi.stubGlobal('Blob', class extends RealBlob {
+      constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options)
+        if (options?.type?.startsWith('text/markdown')) exported = String(parts?.[0] ?? '')
       }
-      activeRenders -= 1
-      return new Blob(['png'], { type: 'image/png' })
     })
 
-    const fixture = createConversation()
-    const tail = addTurn(fixture, 'serial', 1)
-    const runtime = createShareRuntime(document, { renderImage })
     triggerShareAction(tail, runtime)
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(1))
+    expect(toggle().checked).toBe(true)
+    toggle().click()
+    expect(toggle().checked).toBe(false)
+    ;(fixture.scroll.querySelector('[data-dsh-share-selection-download]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(exported).not.toBe(''))
+    expect(exported).toContain('Think 中间步骤')
+    expect(exported).toContain('Bash')
 
-    ;(document.querySelector('[data-dsh-share-choice="width"][data-value="desktop"]') as HTMLButtonElement).click()
-    ;(document.querySelector('[data-dsh-share-choice="font-size"][data-value="xlarge"]') as HTMLButtonElement).click()
-    await new Promise(resolve => window.setTimeout(resolve, 120))
-    expect(renderImage).toHaveBeenCalledTimes(1)
+    exported = ''
+    toggle().click()
+    expect(toggle().checked).toBe(true)
+    ;(fixture.scroll.querySelector('[data-dsh-share-selection-download]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(exported).not.toBe(''))
+    expect(exported).toContain('最终回答 clean')
+    expect(exported).not.toContain('Think')
+    expect(exported).not.toContain('Bash')
+    expect(exported).not.toContain('中间说明')
 
-    finishFirst?.()
-    await vi.waitFor(() => expect(renderImage).toHaveBeenCalledTimes(2))
-    expect(renderedSettings).toEqual([
-      { width: '768px', fontSize: '16px' },
-      { width: '1024px', fontSize: '20px' },
-    ])
-    expect(maxActiveRenders).toBe(1)
-
+    vi.unstubAllGlobals()
     runtime.dispose()
-  })
-
-  it('更新预览时保留旧图，等新图解码后再原位替换', async () => {
-    const objectUrls = ['blob:preview-1', 'blob:preview-2']
-    const createObjectURL = vi.fn(() => objectUrls.shift() as string)
-    const revokeObjectURL = vi.fn()
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
-
-    let finishSecondDecode: (() => void) | undefined
-    const decode = vi.fn()
-      .mockResolvedValueOnce(undefined)
-      .mockImplementationOnce(() => new Promise<void>((resolve) => {
-        finishSecondDecode = resolve
-      }))
-    Object.defineProperty(window.HTMLImageElement.prototype, 'decode', {
-      configurable: true,
-      value: decode,
-    })
-
-    const fixture = createConversation()
-    const tail = addTurn(fixture, 'smooth', 1)
-    const renderImage = vi.fn(async () => new Blob(['png'], { type: 'image/png' }))
-    const runtime = createShareRuntime(document, { renderImage })
-    triggerShareAction(tail, runtime)
-    ;(fixture.scroll.querySelector('[data-dsh-share-selection-create]') as HTMLButtonElement).click()
-    const preview = document.querySelector('[data-dsh-share-preview]') as HTMLImageElement
-    await vi.waitFor(() => expect(preview.src).toBe('blob:preview-1'))
-    expect(preview.style.width).toBe('768px')
-
-    ;(document.querySelector('[data-dsh-share-choice="width"][data-value="desktop"]') as HTMLButtonElement).click()
-    await vi.waitFor(() => expect(decode).toHaveBeenCalledTimes(2))
-
-    expect(preview.hidden).toBe(false)
-    expect(preview.src).toBe('blob:preview-1')
-    expect(preview.style.width).toBe('768px')
-    expect(document.querySelector('[data-dsh-share-status]')?.textContent).toBe('正在更新预览…')
-    expect((document.querySelector('[data-dsh-share-copy]') as HTMLButtonElement).disabled).toBe(true)
-    expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:preview-1')
-
-    finishSecondDecode?.()
-    await vi.waitFor(() => expect(preview.src).toBe('blob:preview-2'))
-    expect(preview.style.width).toBe('1024px')
-    await vi.waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1'))
-    expect((document.querySelector('[data-dsh-share-copy]') as HTMLButtonElement).disabled).toBe(false)
-
-    runtime.dispose()
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-2')
+    window.localStorage.clear()
   })
 })

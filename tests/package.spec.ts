@@ -94,9 +94,11 @@ describe('DSH 插件清单', () => {
     }
   })
 
-  it('构建配置把图片与 Markdown 渲染库内联到浏览器 bundle', async () => {
+  it('构建配置把 Markdown 渲染库内联到浏览器 bundle', async () => {
     const config = await readFile(new URL('../tsdown.config.ts', import.meta.url), 'utf8')
-    expect(config).toContain("onlyBundle: ['html-to-image', 'turndown', 'turndown-plugin-gfm']")
+    expect(config).toContain("onlyBundle: ['turndown', 'turndown-plugin-gfm']")
+    // 图片导出移除后不再内联栅格化库。
+    expect(config).not.toContain('html-to-image')
     expect(config).toContain(
       "neverBundle: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives', '@mixmark-io/domino']",
     )
@@ -110,20 +112,18 @@ describe('DSH 插件清单', () => {
     expect(chineseReadme).toContain('dsh plugin --profile web add dsh-share')
     expect(chineseReadme).toContain('conversation.chat.assistant-actions')
     expect(chineseReadme).toContain('conversation.session.header.utilities')
-    expect(chineseReadme).toContain('下载 PNG 或 Markdown')
+    expect(chineseReadme).toContain('导出为 Markdown 或独立 HTML 文件')
     expect(chineseReadme).toContain('不扫描或修改按钮栏 DOM')
     expect(chineseReadme).toContain('data-chat-flow-kind')
     expect(chineseReadme).toContain('不依赖 CSS Module 生成的类名')
     expect(chineseReadme).toContain('[dshfind.com](https://dshfind.com) DSH 插件超市')
     expect(englishReadme).toContain('[简体中文](./README.md)')
     expect(chineseReadme).toContain('./assets/readme/share-selection.webp')
-    expect(chineseReadme).toContain('./assets/readme/share-dialog.webp')
     expect(englishReadme).toContain('./assets/readme/share-selection.en.webp')
-    expect(englishReadme).toContain('./assets/readme/share-dialog.en.webp')
     expect(englishReadme).toContain('dsh plugin --profile web add dsh-share')
     expect(englishReadme).toContain('conversation.chat.assistant-actions')
     expect(englishReadme).toContain('conversation.session.header.utilities')
-    expect(englishReadme).toContain('PNG download, and Markdown download')
+    expect(englishReadme).toContain('as Markdown or a standalone HTML file')
     expect(englishReadme).toContain('do not scan or modify the action bar DOM')
     expect(englishReadme).toContain('data-chat-flow-kind')
     expect(englishReadme).toContain('does not depend on CSS Module class names')

@@ -27,8 +27,6 @@ const REQUIRED_FILES = [
   'THIRD_PARTY_LICENSES.md',
   'assets/readme/share-selection.webp',
   'assets/readme/share-selection.en.webp',
-  'assets/readme/share-dialog.webp',
-  'assets/readme/share-dialog.en.webp',
 ]
 
 const FORBIDDEN_PREFIXES = ['src/', 'tests/', 'scripts/', '.github/', '.docs/']

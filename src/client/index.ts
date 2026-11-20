@@ -130,10 +130,8 @@ export function apply(ctx: Context): void {
   })
 }
 
-export { createShareCard } from './card.ts'
 export { createShareMarkdown } from './markdown.ts'
 export { findTurnContent, findTurnContentFromAction } from './dom.ts'
-export { renderShareImage, type ImageRenderer } from './preview-dialog.ts'
 export {
   createShareRuntime,
   type InstallOptions,
@@ -142,11 +140,7 @@ export {
 } from './runtime.ts'
 export {
   DEFAULT_SHARE_SETTINGS,
-  FONT_SIZE_PRESETS,
   loadShareSettings,
   saveShareSettings,
-  WIDTH_PRESETS,
-  type FontSizePreset,
   type ShareSettings,
-  type WidthPreset,
 } from './settings.ts'

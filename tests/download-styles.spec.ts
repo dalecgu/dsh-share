@@ -1,11 +1,10 @@
 import { expect, it } from 'vitest'
 import { STYLE_TEXT } from '../src/client/styles.ts'
 
-it('生成图片使用主题主按钮，下载和格式选择保持次级样式', () => {
-  const primary = STYLE_TEXT.match(/\[data-dsh-share-selection-create\] \{([^}]+)\}/g)!
-    .find(rule => rule.includes('button-primary-fill'))!
-  expect(primary).toContain('var(--dsw-alias-button-primary-fill')
-  expect(primary).toContain('var(--dsw-alias-label-primary-foreground')
+it('下载与格式选择保持次级样式，下载组靠右排列', () => {
   expect(STYLE_TEXT).toContain('[data-dsh-share-selection-cancel],\n[data-dsh-share-selection-download],\n[data-dsh-share-format-trigger] {\n  background: transparent;')
-  expect(STYLE_TEXT).toContain('[data-dsh-share-selection-create]:hover:not(:disabled) {\n  background: var(--dsw-alias-button-primary-hover')
+  // 下载组用 margin-left:auto 吃掉中间空白，使按钮落在底栏右侧。
+  expect(STYLE_TEXT).toContain('[data-dsh-share-download-group] { display: inline-flex; align-items: center; margin-left: auto; }')
+  // 生成图片按钮已移除。
+  expect(STYLE_TEXT).not.toContain('[data-dsh-share-selection-create]')
 })

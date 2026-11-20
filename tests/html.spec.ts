@@ -46,7 +46,8 @@ describe('独立 HTML 导出', () => {
 
   it('保留代码块语义和安全的高亮颜色，表格使用独立滚动容器', async () => {
     const entry = message('<div class="md-code-block"><div data-code-block-banner>TS<button>复制</button></div><pre><code><span style="color:rgb(10, 20, 30);background:url(https://bad.invalid)">const</span> x = 1</code></pre></div><table><tr><td>内容</td></tr></table>', 'assistant')
-    const result = await createShareHtml(document, [entry], 'en', DEFAULT_SHARE_SETTINGS)
+    // 该用例只测 HTML 渲染；显式关闭过程过滤，不依赖默认值。
+    const result = await createShareHtml(document, [entry], 'en', { hideProcess: false })
     const parsed = new DOMParser().parseFromString(result.html, 'text/html')
     expect(parsed.querySelector('.code-banner')!.textContent).toBe('TS')
     expect(parsed.querySelector('pre span')!.getAttribute('style')).toBe('color: rgb(10, 20, 30);')

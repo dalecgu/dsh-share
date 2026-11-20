@@ -1,9 +1,7 @@
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
 import { type ShareLocale } from './i18n.ts';
-import { type ImageRenderer } from './preview-dialog.ts';
 export interface InstallOptions {
     getLocale?: () => ShareLocale;
-    renderImage?: ImageRenderer;
     subscribeLocale?: (listener: () => void) => () => void;
 }
 export interface ShareSelectionSnapshot {
@@ -20,7 +18,6 @@ export interface ShareRuntime {
     enterSelection(sessionId: string, source?: HTMLElement, initialTurn?: number, title?: string): void;
     cancelSelection(sessionId: string): void;
     toggleSelection(sessionId: string, turnId: string): void;
-    openSelected(sessionId: string): void;
     dispose(): void;
 }
 export declare function createShareRuntime(document: Document, options?: InstallOptions): ShareRuntime;
